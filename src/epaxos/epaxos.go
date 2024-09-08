@@ -2,17 +2,17 @@ package epaxos
 
 import (
 	"encoding/binary"
-	"epaxosproto"
-	"genericsmr"
-	"genericsmrproto"
+	"epaxos/epaxosproto"
+	"epaxos/genericsmr"
+	"epaxos/genericsmrproto"
 	"io"
 	"log"
-	"priorityqueue"
+	"epaxos/priorityqueue"
 	"sort"
-	"state"
+	"epaxos/state"
 	"sync"
 	"time"
-	"timetrace"
+	"epaxos/timetrace"
 )
 
 const MAX_DEPTH_DEP = 10

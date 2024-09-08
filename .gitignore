@@ -8,3 +8,5 @@ src/golang.org
 src/github.com
 src/google.golang.org
 __pycache__
+.direnv
+result

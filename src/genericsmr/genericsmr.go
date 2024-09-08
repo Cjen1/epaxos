@@ -3,17 +3,17 @@ package genericsmr
 import (
 	"bufio"
 	"encoding/binary"
-	"fastrpc"
+	"epaxos/fastrpc"
 	"fmt"
-	"genericsmrproto"
+	"epaxos/genericsmrproto"
 	"io"
 	"log"
 	"net"
 	"os"
-	"rdtsc"
-	"state"
+	"epaxos/rdtsc"
+	"epaxos/state"
 	"time"
-	"timetrace"
+	"epaxos/timetrace"
 )
 
 const CHAN_BUFFER_SIZE = 200000

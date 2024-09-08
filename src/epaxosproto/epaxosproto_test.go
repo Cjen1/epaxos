@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"reflect"
-	"state"
+	"epaxos/state"
 	"testing"
 )
 

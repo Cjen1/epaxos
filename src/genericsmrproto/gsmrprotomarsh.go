@@ -1,7 +1,7 @@
 package genericsmrproto
 
 import (
-	"fastrpc"
+	"epaxos/fastrpc"
 	"io"
 )
 

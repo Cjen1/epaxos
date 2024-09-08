@@ -1,10 +1,10 @@
 package epaxos
 
 import (
-	"epaxosproto"
-	"genericsmrproto"
+	"epaxos/epaxosproto"
+	"epaxos/genericsmrproto"
 	"sort"
-	"state"
+	"epaxos/state"
 	"time"
 )
 

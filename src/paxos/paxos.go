@@ -2,12 +2,12 @@ package paxos
 
 import (
 	"encoding/binary"
-	"genericsmr"
-	"genericsmrproto"
+	"epaxos/genericsmr"
+	"epaxos/genericsmrproto"
 	"io"
 	"log"
-	"paxosproto"
-	"state"
+	"epaxos/paxosproto"
+	"epaxos/state"
 	"time"
 )
 

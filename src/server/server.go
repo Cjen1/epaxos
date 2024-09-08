@@ -1,17 +1,17 @@
 package main
 
 import (
-	"epaxos"
+	"epaxos/epaxos"
 	"flag"
 	"fmt"
 	"log"
-	"masterproto"
+	"epaxos/masterproto"
 	"net"
 	"net/http"
 	"net/rpc"
 	"os"
 	"os/signal"
-	"paxos"
+	"epaxos/paxos"
 	"runtime"
 	"runtime/pprof"
 	"time"
