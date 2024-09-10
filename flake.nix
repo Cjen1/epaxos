@@ -21,7 +21,7 @@
         defaultPackage = gopkg;
         devShell = pkgs.mkShell {
           inputsFrom = [ gopkg ];
-          buildInputs = [ ];
+          buildInputs = [ pkgs.gopls ];
         };
       });
 }
