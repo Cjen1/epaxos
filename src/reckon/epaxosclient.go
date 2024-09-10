@@ -1,31 +1,23 @@
-package main
+package reckon
 
 import (
 	"bufio"
 	"epaxos/genericsmrproto"
 	"epaxos/masterproto"
 	"epaxos/state"
-	"flag"
-	"fmt"
+	"hash/fnv"
 	"log"
 	"math"
 	"math/rand"
 	"net"
 	"net/rpc"
+	"strconv"
 	"sync"
-
-	rc_go "github.com/cjen1/reckon/reckon/goclient"
 )
 
-var masterAddr *string = flag.String("maddr", "", "Master address. Defaults to localhost")
-var masterPort *int = flag.Int("mport", 7087, "Master port.")
-var clientId *int = flag.Int("cn", 0, "Client ID.")
-var newClientPerRequest *bool = flag.Bool("ncpr", false, "Use a new client per request.")
-
 type Config struct {
-	masterAddr   string
-	masterPort   int
-	clientNumber int32
+	MasterAddr   string
+	ClientNumber int32
 }
 
 type outstandingReq struct {
@@ -46,9 +38,9 @@ type Client struct {
 	config   Config
 	mu       sync.Mutex
 	idgen    SafeIdGen
-	inflight map[int32]*outstandingReq
+	inflight sync.Map
 	addrs    []string
-	writers  map[string]*SafeWriter
+	writers  sync.Map
 	close    bool
 }
 
@@ -64,17 +56,21 @@ func (i *SafeIdGen) next_id(clientNumber int32) int32 {
 func (c *Client) random_writer() *SafeWriter {
 	for {
 		addr := c.addrs[rand.Intn(len(c.addrs))]
-		res := c.writers[addr]
-		if res != nil {
-			return res
+		res, ok := c.writers.Load(addr)
+		if ok {
+			return res.(*SafeWriter)
 		}
 	}
 }
 
 func (c *Client) submit(args genericsmrproto.Propose) *outstandingReq {
-	args.CommandId = c.idgen.next_id(c.config.clientNumber)
+	args.CommandId = c.idgen.next_id(c.config.ClientNumber)
 
-	ir := outstandingReq{}
+	ir := outstandingReq{
+		result: make(chan string),
+	}
+
+	log.Println("Submitting req")
 
 	writer := c.random_writer()
 	writer.mu.Lock()
@@ -83,20 +79,32 @@ func (c *Client) submit(args genericsmrproto.Propose) *outstandingReq {
 	args.Marshal(writer.writer)
 	writer.writer.Flush()
 
-	c.inflight[args.CommandId] = &ir
+	log.Println("Request submitted")
+
+	c.inflight.Store(args.CommandId, &ir)
 
 	return &ir
 }
 
+func conv_str(s string) int64 {
+	res, err := strconv.ParseInt(s, 10, 64)
+	if err == nil {
+		return res
+	}
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	return int64(h.Sum64())
+}
+
 func (c *Client) Put(k string, v string) (string, error) {
-	args := genericsmrproto.Propose{c.idgen.next_id(), state.Command{state.PUT, 0, 0}, 0}
-	res := <-c.submit(args).result
+	args := genericsmrproto.Propose{0, state.Command{state.PUT, state.Key(conv_str(k)), state.Value(conv_str(v))}, 0}
+	<-c.submit(args).result
 	return "unknown", nil
 }
 
 func (c *Client) Get(k string) (string, string, error) {
-	args := genericsmrproto.Propose{c.idgen.next_id(), state.Command{state.GET, 0, 0}, 0}
-	res := <-c.submit(args).result
+	args := genericsmrproto.Propose{0, state.Command{state.GET, state.Key(conv_str(k)), 0}, 0}
+	<-c.submit(args).result
 	return "", "unknown", nil
 }
 
@@ -105,10 +113,11 @@ func (c *Client) Close() {
 }
 
 func dial_master(cfg Config) *rpc.Client {
+	log.Println("Dialing master")
 	var master *rpc.Client
 	var err error
 	for {
-		master, err = rpc.DialHTTP("tcp", fmt.Sprintf("%s:%d", *masterAddr, *masterPort))
+		master, err = rpc.DialHTTP("tcp", cfg.MasterAddr)
 		if err != nil {
 			log.Println("Error connecting to master", err)
 		} else {
@@ -118,6 +127,7 @@ func dial_master(cfg Config) *rpc.Client {
 }
 
 func get_replica_list(cfg Config) []string {
+	log.Println("Getting replica list")
 	master := dial_master(cfg)
 	defer master.Close()
 	rlReply := new(masterproto.GetReplicaListReply)
@@ -127,20 +137,26 @@ func get_replica_list(cfg Config) []string {
 			log.Println("Error making the GetReplicaList RPC", err)
 		}
 	}
+	log.Println("Got replicas: ", rlReply.ReplicaList)
 	return rlReply.ReplicaList
 }
 
 func (cli *Client) dial_replica(addr string) {
+	log.Println("Dialling replica: ", addr)
 	for !cli.close {
 		server, err := net.Dial("tcp", addr)
 		if err != nil {
-			log.Fatalf("Error connecting to replica %d\n", addr)
+			log.Fatalf("Error connecting to replica %s\n", addr)
 		}
 		reader := bufio.NewReader(server)
 		writer := bufio.NewWriter(server)
 
+		log.Println("Dial success: ", addr)
 		cli.mu.Lock()
-		cli.writers[addr] = &SafeWriter{writer: writer}
+		cli.writers.Store(addr, &SafeWriter{
+			mu:     sync.Mutex{},
+			writer: writer,
+		})
 		cli.mu.Unlock()
 
 		var reply genericsmrproto.ProposeReply
@@ -150,47 +166,39 @@ func (cli *Client) dial_replica(addr string) {
 				break
 			}
 
-			ir := cli.inflight[reply.CommandId]
+			log.Println("Response received: ", reply)
 
-			if ir != nil {
-				ir.result <- "Success"
+			l, ok := cli.inflight.Load(reply.CommandId)
+
+			ir := l.(*outstandingReq)
+
+			if ok {
+				ir.result <- "success"
 			}
 		}
 
 		cli.mu.Lock()
-		delete(cli.writers, addr)
+		cli.writers.Delete(addr)
 		cli.mu.Unlock()
 		server.Close()
 	}
 }
 
-func new_client(cfg Config) *Client {
-  addrs := get_replica_list(cfg)
-  cli := Client{
-  	config:   cfg,
-  	addrs:    addrs,
-  	close:    false,
-  }
+func NewClient(cfg Config) *Client {
+	addrs := get_replica_list(cfg)
+	cli := Client{
+		config:   cfg,
+		mu:       sync.Mutex{},
+		idgen:    SafeIdGen{mu: sync.Mutex{}, i: 0},
+		inflight: sync.Map{},
+		addrs:    addrs,
+		writers:  sync.Map{},
+		close:    false,
+	}
 
-  for _, addr := range(cli.addrs) {
-    cli.dial_replica(addr)
-  }
+	for _, addr := range cli.addrs {
+		go cli.dial_replica(addr)
+	}
 
-  return &cli
-}
-
-func main() {
-	flag.Parse()
-
-	flag.Parse()
-
-  config := Config{
-  	masterAddr:   *masterAddr,
-  	masterPort:   *masterPort,
-  	clientNumber: int32(*clientId),
-  }
-
-  rc_go.Run(func() (rc_go.Client, error){
-    return new_client(config), nil
-  }, *clientId, *newClientPerRequest)
+	return &cli
 }

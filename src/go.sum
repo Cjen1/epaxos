@@ -1,2 +1,4 @@
+github.com/Cjen1/reckon/reckon/goclient v0.0.0-20240113162720-df17d816639e h1:p6Ve7dN2ownxxiE/acpxvTR0woI8XhMMMEPyP3Z4WWA=
+github.com/Cjen1/reckon/reckon/goclient v0.0.0-20240113162720-df17d816639e/go.mod h1:QDiaUc71t6wMx8YVzMidXns0AobAtYCIZwvE7zYsto4=
 golang.org/x/sync v0.8.0 h1:3NFvSEYkUoMifnESzZl15y791HH1qU2xm6eCJU5ZPXQ=
 golang.org/x/sync v0.8.0/go.mod h1:Czt+wKu1gCyEFDUtn0jG5QVvpJ6rzVqr5aXyt9drQfk=

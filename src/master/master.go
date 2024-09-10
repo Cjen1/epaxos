@@ -137,6 +137,7 @@ func (master *Master) Register(args *masterproto.RegisterArgs, reply *masterprot
 
 	log.Println("Received Register", addrPort, master.nodeList)
 
+  // If ap already registered
 	for index, ap := range master.nodeList {
 		if ap == addrPort {
 			i = index
@@ -144,9 +145,10 @@ func (master *Master) Register(args *masterproto.RegisterArgs, reply *masterprot
 		}
 	}
 
+  // If not yet registered
 	if i == master.N+1 {
 		for index, a := range master.expectAddrList {
-			if args.Addr == a {
+			if a == addrPort {
 				i = index
 				if !master.connected[i] {
 					break
